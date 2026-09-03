@@ -1,0 +1,99 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-cashflow}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-cashflow}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./infra/local/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-cashflow}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  ledger-api:
+    build: ./services/ledger-service
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-cashflow}:${POSTGRES_PASSWORD:-cashflow}@postgres:5432/${LEDGER_DB_NAME:-ledger_db}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      API_KEY: ${API_KEY:-local-dev-key-change-me}
+    ports:
+      - "8001:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  consolidation-api:
+    build: ./services/consolidation-service
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-cashflow}:${POSTGRES_PASSWORD:-cashflow}@postgres:5432/${CONSOLIDATION_DB_NAME:-consolidation_db}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      API_KEY: ${API_KEY:-local-dev-key-change-me}
+      MAX_CONCURRENCY: ${CONSOLIDATION_MAX_CONCURRENCY:-50}
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    ports:
+      - "8002:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  consolidation-worker:
+    build: ./services/consolidation-service
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-cashflow}:${POSTGRES_PASSWORD:-cashflow}@postgres:5432/${CONSOLIDATION_DB_NAME:-consolidation_db}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    command: ["python", "worker.py"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  prometheus:
+    image: prom/prometheus:latest
+    volumes:
+      - ./infra/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "9090:9090"
+    depends_on:
+      - ledger-api
+      - consolidation-api
+
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+    volumes:
+      - ./infra/monitoring/grafana-datasources.yml:/etc/grafana/provisioning/datasources/datasources.yml:ro
+      - ./infra/monitoring/grafana-dashboards.yml:/etc/grafana/provisioning/dashboards/dashboards.yml:ro
+      - ./infra/monitoring/dashboard.json:/var/lib/grafana/dashboards/dashboard.json:ro
+    depends_on:
+      - prometheus
+
+volumes:
+  postgres_data:

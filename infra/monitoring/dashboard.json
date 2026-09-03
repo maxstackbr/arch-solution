@@ -1,0 +1,74 @@
+{
+  "title": "Cash Flow - RNF Dashboard",
+  "uid": "cashflow-rnf",
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "5s",
+  "time": { "from": "now-15m", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "title": "HTTP request rate (both services)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "sum(rate(http_requests_total[1m])) by (job, status)",
+          "legendFormat": "{{job}} - {{status}}",
+          "datasource": "Prometheus"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "RNF-1: event_publish_failures_total (Ledger)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "datasource": "Prometheus",
+      "description": "Should stay >= 0 without ever turning POST /entries into an error — proves the ledger stays available even when publishing fails (ADR 0005).",
+      "targets": [
+        {
+          "expr": "increase(event_publish_failures_total[1m])",
+          "legendFormat": "publish failures/min",
+          "datasource": "Prometheus"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "RNF-2: consolidation_requests_rejected_total (load shedding)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "datasource": "Prometheus",
+      "description": "Rejections as a share of total consolidation traffic should stay <= 5% under peak load (ADR 0007).",
+      "targets": [
+        {
+          "expr": "sum(rate(consolidation_requests_rejected_total[1m])) / sum(rate(http_requests_total{job=\"consolidation-service\"}[1m]))",
+          "legendFormat": "rejection ratio",
+          "datasource": "Prometheus"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "Event processing (Consolidation Worker)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "rate(event_processed_total[1m])",
+          "legendFormat": "processed/s",
+          "datasource": "Prometheus"
+        },
+        {
+          "expr": "rate(event_duplicate_total[1m])",
+          "legendFormat": "duplicates/s (ADR 0006)",
+          "datasource": "Prometheus"
+        }
+      ]
+    }
+  ]
+}

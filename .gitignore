@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.coverage
+htmlcov/
+.venv/
+venv/
+
+# SQLite files written by the test suites and by a non-Docker local run
+*.db
+
+# Environment
+.env
+
+# Editors / tooling / OS
+.vscode/
+.idea/
+.claude/
+.DS_Store
+
+# Personal notes/scratch space — never meant to reach the public repo
+local-stuff/
+
+# Docker
+*.log
+
+# Diagramas: os PNGs exportados vão para o repositório; fonte editável e notas ficam locais
+docs/diagrams/*
+!docs/diagrams/*.png
